@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Frontend React application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:5000/api
+
+  # Backend API server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/mysilania
+      - REDIS_URL=redis://redis:6379
+      - PORT=5000
+      - JWT_SECRET=your_jwt_secret_here
+      - OCR_ENGINE=tesseract
+      - EBAY_API_KEY=your_ebay_api_key_here
+      - SHOPIFY_API_KEY=your_shopify_api_key_here
+      - CLAUDE_API_KEY=your_claude_api_key_here
+
+  # OCR service (Python-based)
+  ocr_service:
+    build:
+      context: ./backend/ocr
+      dockerfile: ../../docker/ocr.Dockerfile
+    volumes:
+      - ./backend/ocr:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      - backend
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OCR_ENGINE=tesseract
+      - BACKEND_URL=http://backend:5000
+
+  # Web scraper service (Python-based)
+  scraper_service:
+    build:
+      context: ./backend/scraper
+      dockerfile: ../../docker/scraper.Dockerfile
+    volumes:
+      - ./backend/scraper:/app
+    depends_on:
+      - backend
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BACKEND_URL=http://backend:5000
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=mysilania
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
